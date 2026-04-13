@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    <link rel="preload" href="music.mp3" as="audio" type="audio/mpeg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <style>
       @import url(https://fonts.googleapis.com/css?family=Lato:300italic);
       @import url('https://fonts.googleapis.com/css2?family=Dancing+Script:wght@700&display=swap');
@@ -212,37 +215,6 @@
       .sprinkle:nth-child(17) { left: 145px; top: 525px; background: #ff6f00; --rot: 55deg;  animation-delay: 7.4s; }
       .sprinkle:nth-child(18) { left: 200px; top: 531px; background: #1de9b6; --rot: -50deg; animation-delay: 7.2s; }
 
-      /* ============================================== Tap overlay */
-
-      #tap-overlay {
-        position: fixed;
-        top: 0; left: 0;
-        width: 100%; height: 100%;
-        z-index: 100;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: rgba(0,0,0,0.35);
-        cursor: pointer;
-        -webkit-tap-highlight-color: transparent;
-        touch-action: manipulation;
-      }
-      #tap-overlay span {
-        font-family: 'Dancing Script', cursive;
-        font-size: 2rem;
-        color: #fff;
-        padding: 18px 40px;
-        border: 2px solid #fff;
-        border-radius: 50px;
-        pointer-events: none;
-        animation: tapPulse 1.5s ease-in-out infinite;
-      }
-      @keyframes tapPulse {
-        0%, 100% { transform: scale(1); opacity: 1; }
-        50% { transform: scale(1.08); opacity: 0.8; }
-      }
-      #tap-overlay.hidden { display: none !important; }
-
       /* ============================================== Confetti */
 
       #confetti-canvas {
@@ -306,7 +278,6 @@
     </style>
   </head>
   <body>
-      <div id="tap-overlay"><span>Tap to Celebrate 🎂</span></div>
       <canvas id="confetti-canvas"></canvas>
       <div class="cake-wrapper">
       <div class="sprinkles-container">
@@ -592,6 +563,7 @@
           function initAudio() {
             music = new Audio('music.mp3');
             music.setAttribute('playsinline', '');
+            music.preload = 'auto';
             music.currentTime = 85;
             music.addEventListener('ended', function() {
               music.currentTime = 85;
@@ -696,17 +668,17 @@
             }, beatInterval);
           }
 
-          // --- Start on user tap (required on mobile) ---
-          var overlay = document.getElementById('tap-overlay');
+          // --- Auto-start audio ---
+          var started = false;
 
           function startEverything() {
-            // Create Audio inside user gesture so mobile browsers allow playback
-            if (!music) {
-              initAudio();
-            }
-            overlay.classList.add('hidden');
+            if (started) return;
+            started = true;
+            if (!music) initAudio();
             if (useWebAudio && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             music.play().then(function() {
+              document.removeEventListener('touchend', onFirstInteraction);
+              document.removeEventListener('click', onFirstInteraction);
               if (useWebAudio) {
                 setTimeout(function() {
                   if (checkWebAudioWorking()) {
@@ -721,43 +693,21 @@
                 startFallbackBeats();
               }
             }).catch(function() {
-              // Still blocked — show overlay again
-              overlay.classList.remove('hidden');
+              // Autoplay blocked — reset and wait for user interaction
+              started = false;
             });
           }
 
-          // Always show overlay and wait for tap (most reliable on mobile)
-          function onTap(e) {
-            e.preventDefault();
-            overlay.removeEventListener('touchend', onTap);
-            overlay.removeEventListener('click', onTap);
+          // Fallback: start on first user interaction (invisible, no overlay)
+          function onFirstInteraction() {
             startEverything();
           }
-          overlay.addEventListener('touchend', onTap);
-          overlay.addEventListener('click', onTap);
+          document.addEventListener('touchend', onFirstInteraction, { once: true });
+          document.addEventListener('click', onFirstInteraction, { once: true });
 
-          // On desktop, also try autoplay
-          var isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-          if (!isMobile) {
-            initAudio();
-            overlay.classList.add('hidden');
-            music.play().then(function() {
-              overlay.removeEventListener('touchend', onTap);
-              overlay.removeEventListener('click', onTap);
-              if (useWebAudio) {
-                setTimeout(function() {
-                  if (checkWebAudioWorking()) { detectLoop(); }
-                  else {
-                    try { source.disconnect(); analyser.disconnect(); } catch(e) {}
-                    useWebAudio = false;
-                    startFallbackBeats();
-                  }
-                }, 300);
-              } else { startFallbackBeats(); }
-            }).catch(function() {
-              overlay.classList.remove('hidden');
-            });
-          }
+          // Try to autoplay immediately (works on desktop and some mobile)
+          initAudio();
+          startEverything();
         })();
       </script>
   </body>
