@@ -24,6 +24,43 @@
         background: #ee9ca7;
       }
 
+      /* Pause ALL animations until audio is ready */
+      body.loading,
+      body.loading * {
+        animation-play-state: paused !important;
+      }
+
+      /* Loading overlay */
+      #loading-overlay {
+        position: fixed;
+        top: 0; left: 0;
+        width: 100%; height: 100%;
+        z-index: 200;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #ee9ca7;
+      }
+      #loading-overlay.hidden { display: none !important; }
+      .loader {
+        width: 48px; height: 48px;
+        border: 4px solid #fff;
+        border-bottom-color: #5C3317;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        animation-play-state: running !important;
+      }
+      .loader-text {
+        font-family: 'Dancing Script', cursive;
+        color: #fff;
+        font-size: 1.4rem;
+        margin-top: 18px;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+
       .name{
         font-size: 1.1rem;
         font-weight: 600;
@@ -277,7 +314,8 @@
       }
     </style>
   </head>
-  <body>
+  <body class="loading">
+      <div id="loading-overlay"><div class="loader"></div><div class="loader-text">Loading...</div></div>
       <canvas id="confetti-canvas"></canvas>
       <div class="cake-wrapper">
       <div class="sprinkles-container">
@@ -392,7 +430,7 @@
         </path>
         <path fill="#411900" d="M173.667,21.571c-33.174,0-111.467,0-147.334,0c-4,0-4-16.002,0-16.002c39.836,0,105.982,0,147.334,0
         C177.668,5.569,177.667,21.571,173.667,21.571z">
-            <animate id="bizcocho_1" attributeName="d" calcMode="spline" keySplines="0 0 1 1; 0 0 1 1; 0 0 1 1; 0.25 0 1 1; 0 0 1 1; 0.25 0 0.6 1" begin="2s" dur="0.8s" fill="freeze" values="
+            <animate id="bizcocho_1" attributeName="d" calcMode="spline" keySplines="0 0 1 1; 0 0 1 1; 0 0 1 1; 0.25 0 1 1; 0 0 1 1; 0.25 0 0.6 1" begin="indefinite" dur="0.8s" fill="freeze" values="
                               M173.667,21.571c-33.174,0-111.467,0-147.334,0c-4,0-4-16.002,0-16.002c39.836,0,105.982,0,147.334,0
         C177.668,5.569,177.667,21.571,173.667,21.571z
                               ;
@@ -668,17 +706,30 @@
             }, beatInterval);
           }
 
-          // --- Auto-start audio ---
+          // --- Preload audio, then unleash the page ---
+          var loadingOverlay = document.getElementById('loading-overlay');
+          var audioReady = false;
           var started = false;
+
+          function unleashPage() {
+            // Unfreeze all CSS animations
+            document.body.classList.remove('loading');
+            loadingOverlay.classList.add('hidden');
+            // Kick off the SVG animation chain after 2s (matches original delay)
+            setTimeout(function() {
+              var biz1 = document.getElementById('bizcocho_1');
+              if (biz1 && biz1.beginElement) biz1.beginElement();
+            }, 2000);
+          }
 
           function startEverything() {
             if (started) return;
             started = true;
-            if (!music) initAudio();
             if (useWebAudio && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
             music.play().then(function() {
               document.removeEventListener('touchend', onFirstInteraction);
               document.removeEventListener('click', onFirstInteraction);
+              unleashPage();
               if (useWebAudio) {
                 setTimeout(function() {
                   if (checkWebAudioWorking()) {
@@ -693,21 +744,26 @@
                 startFallbackBeats();
               }
             }).catch(function() {
-              // Autoplay blocked — reset and wait for user interaction
+              // Autoplay blocked — wait for user interaction
               started = false;
             });
           }
 
-          // Fallback: start on first user interaction (invisible, no overlay)
           function onFirstInteraction() {
-            startEverything();
+            if (audioReady) startEverything();
           }
           document.addEventListener('touchend', onFirstInteraction, { once: true });
           document.addEventListener('click', onFirstInteraction, { once: true });
 
-          // Try to autoplay immediately (works on desktop and some mobile)
+          // Init audio and wait for it to be ready
           initAudio();
-          startEverything();
+          music.addEventListener('canplaythrough', function() {
+            audioReady = true;
+            // Try autoplay right away
+            startEverything();
+          }, { once: true });
+          // Force the browser to start loading
+          music.load();
         })();
       </script>
   </body>
